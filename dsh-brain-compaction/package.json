@@ -1,6 +1,6 @@
 {
   "name": "dsh-brain-compaction",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "人脑式上下文压缩逻辑 — DeepSeek Harness 上下文压缩统一协同层: 集成 dsh-argp / dsh-compaction-instant / dsh-headroom / dsh-sgme / dsh-memory-vault / dsh-mcp-lens / dsh-context-doctor，提供统一配置、工具协调与验证机制。",
   "type": "module",
   "main": "./lib/index.js",
@@ -51,6 +51,7 @@
     "dsh-compaction-instant": "^0.1.4",
     "dsh-mcp-lens": "^0.1.0-rc.9",
     "dsh-memory-vault": "^0.1.5",
+    "dsh-routing-suite": "^0.1.2",
     "dsh-sgme": "^0.3.1"
   },
   "peerDependencies": {

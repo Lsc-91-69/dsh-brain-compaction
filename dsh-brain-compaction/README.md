@@ -12,6 +12,7 @@ not a dependency collector:
 | dsh-memory-vault (cross-session memory) | `memory_remember` / `memory_recall` / `memory_forget` | enabled | `brain-memory-vault` |
 | dsh-sgme (multi-agent shared memory) | `memory_search` `wiki_*` `signal_*` `role_*` (18 tools) | disabled (needs SGME gateway) | `brain-sgme` |
 | dsh-mcp-lens (lazy MCP tool catalog) | `mcp_search` / `mcp_call` | enabled (zero servers) | `brain-mcp-lens` |
+| dsh-routing-suite (smart routing "We Need" chain, 0 extra LLM calls) | no model tools; assemble-time guidance section + read-only status API | enabled | `brain-routing-suite` |
 | dsh-context-doctor (injection token audit) | `context_audit` | optional (GitHub-only) | `context-doctor` |
 | **Unified layer (this plug-in)** | `brain_status` / `brain_verify` / `brain_recall` | enabled | `dsh-brain-compaction` |
 
@@ -32,6 +33,17 @@ not a dependency collector:
 - **One panel**: Settings → Plugins → Brain Compaction binds multiple settings
   namespaces (this plug-in + compaction-instant + headroom) in one card; writes
   still go through each plug-in’s native scope (schema-validated, live-applied).
+- **Routing chain (We-Need)**: `dsh-routing-suite` is a host row — **zero extra
+  LLM calls**; it regex-classifies the first user task (fix/diagnose/review →
+  inspect-first; build/create/implement → direct) and appends one ~90-char
+  guidance line, but only for sessions whose preset id is exactly `routing-suite`.
+  Deep integration: mounted under the unique id `brain-routing-suite` (status API
+  and strategy surface stay available), and the same We-Need discipline is baked
+  into the brain preset persona (always-on for any first task, no id check). The
+  honest token story: direct tasks skip redundant exploration, maintenance tasks
+  never skip root cause — fewer wasted turns, less context growth; it does NOT
+  lower per-request injection cost. If you previously installed the standalone
+  bundle, remove it before using this assembly.
 
 ## Install
 

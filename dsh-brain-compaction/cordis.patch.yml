@@ -127,6 +127,21 @@
         allowTools: []
         denyTools: []
 
+    # ── 智能路由: dsh-routing-suite（"We Need" 思维链, 0 额外 LLM 调用）──
+    #    host 行: 只读状态 API + 策略配置面; 对【预设 id 恰为 routing-suite】
+    #    的会话在 system-prompt/assemble 时按首条用户任务注入一句约 90 字符的
+    #    路由引导（修复/排查/审查→检查优先; 新建/实现→直接执行并验证）。
+    #    brain 预设把同样的 We-Need 纪律固化在 persona 里（任何首任务都生效,
+    #    不依赖该 id 判断), 二者叠加即"思维链 + 0 额外请求"。
+    #    注意: 若本机曾单独安装过 dsh-routing-suite（其自身 bundle 行 id 同名
+    #    dsh-routing-suite), 请先 `dsh plugin --profile web remove
+    #    dsh-routing-suite`, 否则行 id 重复且 /routing-suite/api 路由挂两次。
+    - id: brain-routing-suite
+      name: dsh-routing-suite
+      config:
+        enabled: true
+        strategy: auto
+
 # ── 注入审计（可选组件）─────────────────────────────────────────────────────
 # dsh-context-doctor 未发布到 npm（GitHub-only, private: true）。用户按官方
 # README 安装该 bundle 后, 其自身的 patch 会插入 context-doctor 行; 本插件的

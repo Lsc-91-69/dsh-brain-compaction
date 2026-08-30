@@ -11,6 +11,7 @@
 | dsh-memory-vault（跨会话记忆库） | `memory_remember` / `memory_recall` / `memory_forget` | ✅ 启用 | `brain-memory-vault` |
 | dsh-sgme（拾光记忆引擎·多智能体共享） | `memory_search` `wiki_*` `signal_*` `role_*` 等 18 个 | ⬜ 禁用（需原厂网关） | `brain-sgme` |
 | dsh-mcp-lens（MCP 工具懒加载） | `mcp_search` / `mcp_call` | ✅ 启用（零服务器） | `brain-mcp-lens` |
+| dsh-routing-suite（智能路由 "We Need" 思维链, 0 额外 LLM 调用） | 无模型工具；assemble 注入引导段 + 只读状态 API | ✅ 启用 | `brain-routing-suite` |
 | dsh-context-doctor（注入物 token 审计） | `context_audit` | ⬜ 可选（GitHub-only） | `context-doctor` |
 | **统一层（本插件）** | `brain_status` / `brain_verify` / `brain_recall` | ✅ | `dsh-brain-compaction` |
 
@@ -28,6 +29,14 @@
 - **统一面板**：Settings → Plugins → 人脑式上下文压缩。一张卡片绑定多个 settings
   namespace（本插件 + compaction-instant + headroom），哪些在场就渲染哪些小节；
   写入仍走各插件原生 scope（schema 校验 + live 生效）。
+- **路由思维链（We-Need）**：`dsh-routing-suite` 是 host 行——**0 次额外 LLM 调用**,
+  用正则对首条用户任务分类（修复/排查/审查→检查优先；新建/实现→直接执行并验证）,
+  仅在预设 id 恰为 `routing-suite` 的会话注入一句约 90 字符的引导。深度融合 =
+  本插件用自研 id `brain-routing-suite` 挂载它（状态 API/策略面可用）, 且把同一套
+  We-Need 纪律**固化进 brain 预设的 persona**（任何首任务常驻生效, 不依赖 id 判断）。
+  token 节省的真实机理：直接任务免去无谓探索, 维护任务避免跳过根因——减少返工轮次
+  与上下文生长; 它不改变注入物的常驻成本, 请勿夸大。
+  若你在此前单独安装过 dsh-routing-suite, 请先移除独立 bundle 再使用本插件的组装。
 
 ## 安装
 

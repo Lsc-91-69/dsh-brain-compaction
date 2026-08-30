@@ -98,6 +98,20 @@ if (existsSync(join(root, 'lib/index.js')) && existsSync(join(root, 'lib/client.
   bad('lib/', 'lib/ 缺失——GitHub 安装者无法免构建安装, 请 npm run build 后提交')
 }
 
+// 5e. routing 集成：行 id 必须为 brain-routing-suite（若用 dsh-routing-suite 会与该插件
+//     自身 bundle 行的 id 重名 → 启动失败, 且 /routing-suite/api 路由双挂载）。
+if (patchText.includes('- id: brain-routing-suite') && !/^\s*- id: dsh-routing-suite\s*$/m.test(patchText)) {
+  ok('routing 行 id = brain-routing-suite（不与原插件自身行重名）')
+} else {
+  bad('routing 行 id', '缺少 brain-routing-suite 行, 或出现了重复的 dsh-routing-suite 行 id')
+}
+
+// 5f. routing 行配置：enabled + strategy 存在（auto|inspect-first|direct）。
+const routingRow = patchText.split(/^\s*- id: brain-routing-suite\s*$/m)[1] ?? ''
+routingRow.includes('enabled: true') && /strategy:\s*(auto|inspect-first|direct)/.test(routingRow)
+  ? ok('routing 行配置齐全（enabled: true, strategy: auto）')
+  : bad('routing 行配置', 'brain-routing-suite 行缺少 enabled/strategy')
+
 // ── 汇总 ──
 console.log(`\n${checks - failures.length}/${checks} 契约检查通过`)
 if (failures.length > 0) {

@@ -97,10 +97,20 @@ var COMPONENTS = [
     id: "doctor",
     label: "dsh-context-doctor \u6CE8\u5165\u5BA1\u8BA1\uFF08context_audit\uFF09",
     row: "context-doctor",
+    pkg: "dsh-context-doctor",
     kinds: ["audit"],
     tools: ["context_audit"],
     defaultOn: false,
     external: true
+  },
+  {
+    id: "routing",
+    label: 'dsh-routing-suite \u667A\u80FD\u8DEF\u7531\uFF08"We Need" \u601D\u7EF4\u94FE, 0 \u989D\u5916 LLM \u8C03\u7528\uFF09',
+    row: "brain-routing-suite",
+    pkg: "dsh-routing-suite",
+    kinds: ["routing"],
+    tools: [],
+    defaultOn: true
   }
 ];
 var BRAIN_TOOLS = ["brain_status", "brain_verify", "brain_recall"];
@@ -109,6 +119,16 @@ var ENGINE_CLASS_MAP = {
   InstantCompactionEngine: "instant",
   HeadroomCompactionEngine: "headroom"
 };
+function moduleResolvable(spec) {
+  try {
+    const meta = import.meta;
+    if (typeof meta.resolve !== "function") return false;
+    meta.resolve(spec);
+    return true;
+  } catch {
+    return false;
+  }
+}
 function detectTools(ctx) {
   const names = /* @__PURE__ */ new Set();
   try {
@@ -182,6 +202,21 @@ function componentMatrix(ctx, toolNames) {
   return COMPONENTS.map((c) => {
     const present = c.tools.filter((t) => toolNames.has(t));
     const missing = c.tools.filter((t) => !toolNames.has(t));
+    const toolLess = c.tools.length === 0 && c.pkg !== void 0;
+    if (toolLess) {
+      const installed = moduleResolvable(c.pkg);
+      return {
+        id: c.id,
+        label: c.label,
+        row: c.row,
+        kinds: c.kinds,
+        expected: c.tools,
+        present: [],
+        missing: [],
+        defaultOn: c.defaultOn,
+        state: installed ? "active" : "missing"
+      };
+    }
     const isEngine = c.kinds.includes("engine");
     const isActiveEngine = isEngine && activeEngine === c.id;
     const engineSide = !isEngine ? present.length > 0 : isActiveEngine || present.length > 0 && activeEngine === null;
@@ -231,7 +266,7 @@ function verifyReport(ctx, session, detail) {
   const history = compactionHistory(session, 3);
   const verdicts = matrix.map((m) => {
     const ok = m.state === "active" && m.missing.length === 0;
-    const text = ok ? `PASS  ${m.label}\uFF08\u884C ${m.row}\uFF09\u5728\u573A\uFF0C\u5DE5\u5177\u9F50\u5907` : m.state === "disabled" ? `SKIP  ${m.label}\uFF08\u884C ${m.row}\uFF09\u9ED8\u8BA4\u7981\u7528\uFF1A${m.id === "sgme" ? "\u9700\u8981 SGME \u7F51\u5173 + \u5BC6\u94A5" : m.id === "headroom" ? "\u9700\u8981\u672C\u5730 Headroom \u4EE3\u7406" : m.id === "instant" ? "\u4E0E argp \u5F15\u64CE\u4E92\u65A5\uFF08\u5907\u9009\u5F15\u64CE\uFF09" : m.id === "doctor" ? "\u672A\u5B89\u88C5\uFF08GitHub-only\uFF0C\u53EF\u9009\uFF09" : "\u7EC4\u5408\u4E2D\u7981\u7528"}` : `FAIL  ${m.label}\uFF08\u884C ${m.row}\uFF09\u9884\u671F\u5728\u573A\u4F46\u5DE5\u5177\u7F3A\u5931: ${m.missing.join(", ") || "(\u65E0)"}`;
+    const text = ok ? `PASS  ${m.label}\uFF08\u884C ${m.row}\uFF09\u5728\u573A\uFF0C\u5DE5\u5177\u9F50\u5907` : m.state === "disabled" ? `SKIP  ${m.label}\uFF08\u884C ${m.row}\uFF09\u9ED8\u8BA4\u7981\u7528\uFF1A${m.id === "sgme" ? "\u9700\u8981 SGME \u7F51\u5173 + \u5BC6\u94A5" : m.id === "headroom" ? "\u9700\u8981\u672C\u5730 Headroom \u4EE3\u7406" : m.id === "instant" ? "\u4E0E argp \u5F15\u64CE\u4E92\u65A5\uFF08\u5907\u9009\u5F15\u64CE\uFF09" : m.id === "doctor" ? "\u672A\u5B89\u88C5\uFF08GitHub-only\uFF0C\u53EF\u9009\uFF09" : "\u7EC4\u5408\u4E2D\u7981\u7528"}` : `FAIL  ${m.label}\uFF08\u884C ${m.row}\uFF09\u9884\u671F\u5728\u573A\u4F46\u5DE5\u5177\u7F3A\u5931: ${m.missing.join(", ") || "(\u65E0\u6A21\u578B\u5DE5\u5177\u2014\u2014\u5305\u4E0D\u53EF\u89E3\u6790\u6216\u672A\u5B89\u88C5)"}`;
     return { id: m.id, ok, text };
   });
   const engineCheck = {

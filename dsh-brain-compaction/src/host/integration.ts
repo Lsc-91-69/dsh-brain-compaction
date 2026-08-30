@@ -27,7 +27,9 @@ export interface BrainComponent {
   id: string
   label: string
   row: string
-  kinds: Array<'engine' | 'compression' | 'memory' | 'mcp' | 'audit'>
+  /** 实际 npm 包名（无工具/无服务组件用它做 import.meta.resolve 探测）。 */
+  pkg?: string
+  kinds: Array<'engine' | 'compression' | 'memory' | 'mcp' | 'audit' | 'routing'>
   tools: string[]
   defaultOn: boolean
   external?: boolean
@@ -92,10 +94,20 @@ export const COMPONENTS: BrainComponent[] = [
     id: 'doctor',
     label: 'dsh-context-doctor 注入审计（context_audit）',
     row: 'context-doctor',
+    pkg: 'dsh-context-doctor',
     kinds: ['audit'],
     tools: ['context_audit'],
     defaultOn: false,
     external: true,
+  },
+  {
+    id: 'routing',
+    label: 'dsh-routing-suite 智能路由（"We Need" 思维链, 0 额外 LLM 调用）',
+    row: 'brain-routing-suite',
+    pkg: 'dsh-routing-suite',
+    kinds: ['routing'],
+    tools: [],
+    defaultOn: true,
   },
 ]
 
@@ -107,6 +119,22 @@ const ENGINE_CLASS_MAP: Record<string, string> = {
   ArgpGraphEngine: 'argp',
   InstantCompactionEngine: 'instant',
   HeadroomCompactionEngine: 'headroom',
+}
+
+/**
+ * 模块是否可解析（用于无模型工具、无服务暴露的组件——如 dsh-routing-suite,
+ * 它只在 system-prompt/assemble 时注入引导段, 工具矩阵里没有它的身影）。
+ * 走 ESM import.meta.resolve, 零 import 耦合; 失败一律返回 false。
+ */
+export function moduleResolvable(spec: string): boolean {
+  try {
+    const meta = import.meta as unknown as { resolve?: (s: string) => string }
+    if (typeof meta.resolve !== 'function') return false
+    meta.resolve(spec)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** 从 ctx.tools.schemas() 读出当前 scope 的工具名集合（容错）。 */
@@ -209,6 +237,23 @@ export function componentMatrix(ctx: Context, toolNames: Set<string>): Array<{
   return COMPONENTS.map((c) => {
     const present = c.tools.filter((t) => toolNames.has(t))
     const missing = c.tools.filter((t) => !toolNames.has(t))
+    // 无模型工具、无服务暴露的组件（如 routing）无法用工具矩阵探测,
+    // 改用包可解析性（installed = 可作为行挂载; 由本插件 patch 保证挂载）。
+    const toolLess = c.tools.length === 0 && c.pkg !== undefined
+    if (toolLess) {
+      const installed = moduleResolvable(c.pkg)
+      return {
+        id: c.id,
+        label: c.label,
+        row: c.row,
+        kinds: c.kinds,
+        expected: c.tools,
+        present: [],
+        missing: [] as string[],
+        defaultOn: c.defaultOn,
+        state: installed ? 'active' : 'missing',
+      }
+    }
     const isEngine = c.kinds.includes('engine')
     const isActiveEngine = isEngine && activeEngine === c.id
     const engineSide = !isEngine
@@ -268,7 +313,7 @@ export function verifyReport(ctx: Context, session: unknown, detail: 'summary' |
       ? `PASS  ${m.label}（行 ${m.row}）在场，工具齐备`
       : m.state === 'disabled'
         ? `SKIP  ${m.label}（行 ${m.row}）默认禁用：${m.id === 'sgme' ? '需要 SGME 网关 + 密钥' : m.id === 'headroom' ? '需要本地 Headroom 代理' : m.id === 'instant' ? '与 argp 引擎互斥（备选引擎）' : m.id === 'doctor' ? '未安装（GitHub-only，可选）' : '组合中禁用' }`
-        : `FAIL  ${m.label}（行 ${m.row}）预期在场但工具缺失: ${m.missing.join(', ') || '(无)'}`
+        : `FAIL  ${m.label}（行 ${m.row}）预期在场但工具缺失: ${m.missing.join(', ') || '(无模型工具——包不可解析或未安装)'}`
     return { id: m.id, ok, text }
   })
   const engineCheck = {

@@ -26,13 +26,6 @@
   config:
     text: >-
       You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
-      This session runs the 人脑式上下文压缩 (brain compaction) system. Practise the discipline:
-      - Start sensitive work with brain_status, and verify the compression layer with brain_verify (matrix PASS/SKIP/FAIL + token snapshot). Report component issues instead of silently adapting.
-      - Content elided by compaction is recoverable, never guess it: find the seq via list_pruned/recall (ARGP engine) or search (instant engine), then recover by seq via brain_recall(seq) or recall_pruned. Use brain_recall(query) when you know the gist but not the seq.
-      - Tool outputs compacted by Headroom show a CCR hash: restore with headroom_retrieve before citing them.
-      - Cross-session facts go to the memory vault: memory_remember for stable facts/decisions, memory_recall before acting on remembered context, memory_forget for corrections.
-      - Route every task with the We-Need chain (0 extra LLM calls, mirrors dsh-routing-suite): classify up front — maintenance/investigation work (fix/diagnose/review/audit/migrate/refactor/optimize) means inspect the relevant facts first, identify the root cause, then make the smallest justified change and verify it; creation/implementation work (build/create/implement/generate/scaffold/write) means move directly toward a usable result, keep the design proportional, and verify the finished behavior. Never burn exploration tokens on direct tasks; never skip root cause on maintenance tasks.      - MCP capabilities are lazy: mcp_search first, then mcp_call with an exact schema. Large catalogs never load wholesale.
-      - Only hard dependencies from the compaction layer: recall before reconstructing, remember before forgetting, audit before optimizing. When in doubt, call brain_status.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -132,7 +125,7 @@
 
 # ── compaction ──────────────────────────────────────────────────────────────
 
-# `compaction-argp` reads `toolResultPrune` through `ctx.get`, so the pruner must
+# `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must
 # share this realm rather than sit outside it.
 #
 # `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST
@@ -140,12 +133,7 @@
 # keys every fold by Session, and owns the context-meter projection units the
 # browser reads for every session — behind a realm those units would come and go
 # with whichever presets happen to be mounted. What a preset chooses is whether
-# its agent compacts at all, which `compaction-argp` below is.
-#
-# 引擎互斥：ctx.compaction 每上下文只允许一个实现。默认 dsh-argp（0-LLM 原子
-# 引用图剪枝, 精确压缩率, 选择性遗忘）。切换到 dsh-compaction-instant 时：
-# 停用本行列（加 disabled: true）并启用下方注释行（含 /compact 相关行已在
-# host bundle 的 patch 中处理；如需会话级 compact 命令, 保留 command-compact）。
+# its agent compacts at all, which is `compaction-basic` below.
 - id: compaction
   name: cordis:group
   group: true
@@ -153,15 +141,8 @@
     compaction: true
     toolResultPruner: true
   config:
-    - id: compaction-argp
-      name: dsh-argp
-      config:
-        maxPasses: 256
-        recencyGuard: 10
-
-    # - id: compaction-instant
-    #   name: dsh-compaction-instant
-    #   disabled: true
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
 
     - id: command-compact
       name: '@deepseek-ai/dsh-command-compact'
@@ -216,17 +197,16 @@
         toolName: subagent_fork
         backgroundMode: continuable
 
-    # Production dsh does not install these optional providers. Install the
-    # matching Bundle in this Profile and restart the Host, then copy this
-    # preset and remove `disabled` from the matching tool row. Host availability
-    # alone grants no tool.
+    # Product providers are host-plane singletons. Copy this preset, then
+    # remove `disabled` from either ordinary tool row to expose that product
+    # only to agents composed from the copy.
     - id: tool-subagent-codex
       name: '@deepseek-ai/dsh-tool-subagent'
       disabled: true
       config:
         provider: codex
         toolName: subagent_codex
-        backgroundMode: one-shot
+        enableRunInBackground: false
         maxDepth: provider-managed
 
     - id: tool-subagent-claude-code
@@ -235,7 +215,7 @@
       config:
         provider: claude-code
         toolName: subagent_claude_code
-        backgroundMode: one-shot
+        enableRunInBackground: false
         maxDepth: provider-managed
 
     - id: workflow-worker-thread
@@ -269,4 +249,3 @@
   config:
     fetch: false
     searchTimeoutMs: 60000
-
