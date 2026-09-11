@@ -1,0 +1,2 @@
+name: 人脑式上下文压缩
+description: 深度集成 dsh-brain-compaction 体系（dsh-argp 引擎 + 记忆库 + MCP 懒加载 + 可选 Headroom/SGME/Context Doctor）的统一上下文压缩预设：0-LLM 剪枝、按需召回、跨会话记忆与注入物审计，附压缩纪律提示词。

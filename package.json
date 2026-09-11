@@ -1,0 +1,70 @@
+{
+  "name": "dsh-brain-compaction",
+  "version": "0.1.5",
+  "description": "人脑式上下文压缩逻辑 — DeepSeek Harness 上下文压缩统一协同层: 集成 dsh-argp / dsh-compaction-instant / dsh-headroom / dsh-sgme / dsh-memory-vault / dsh-mcp-lens / dsh-context-doctor，提供统一配置、工具协调与验证机制。适配 DSH 0.1.5。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "preset",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md"
+  ],
+  "license": "MIT",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "context-compression",
+    "compaction",
+    "memory",
+    "brain"
+  ],
+  "engines": {
+    "node": ">=22.19"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.5"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "dependencies": {
+    "@wanyantiande/dsh-headroom": "^0.3.0",
+    "dsh-argp": "^1.1.0",
+    "dsh-compaction-instant": "^0.1.4",
+    "dsh-mcp-lens": "^0.1.0-rc.9",
+    "dsh-memory-vault": "^0.1.5",
+    "dsh-routing-suite": "^0.1.2",
+    "dsh-sgme": "^0.3.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.1",
+    "@deepseek-ai/dsh-token-meter": ">=0.1.5-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node --check lib/index.js && node --check src/client.js",
+    "test": "node test/contract.test.mjs",
+    "test:mount": "node test/mount.test.mjs",
+    "test:client": "node test/client.test.mjs",
+    "verify": "npm run build && npm run test && npm run test:mount && npm run test:client"
+  }
+}

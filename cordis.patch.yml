@@ -1,0 +1,187 @@
+# dsh-brain-compaction bundle patch — 人脑式上下文压缩逻辑
+#
+# 本 bundle 就是一个"统一上下文压缩体系"的组装层：安装本包即把下面的
+# 组件行一次性插入 profile 的组合树（Cordis 组合, 不是 package.json 依赖）。
+# 各子插件以"包名行"的形式被引用（row.name = npm 包名），由 pnpm hoisted
+# linker 解析; 组件之间的协同逻辑在 src/host/integration.ts 中实现。
+#
+# ── DSH 0.1.5 适配（本版本 0.1.5 的适用面；版本号刻意与 DSH 对齐）──────────
+# 本 patch 与 lib/ 构建产物针对 **DSH 0.1.5-rc.1 及以上**：
+#   - settings seam 收窄为 `ctx.settings.installSection()`（包级
+#     installSettingsSection / settingsNamespace 已删除）；
+#   - Session 用 snapshotEvents() 读日志（旧的 .events 属性已移除）；
+#   - 浏览器模块表用 @deepseek-ai/dsh-client-store（旧 dsh-client-runtime 已移除）。
+# `!!js` 表达式与 loader 的 dshHomePath() 助手在 0.1.5 中仍然可用（见
+# packages/boot/app-boot/src/index.ts 的 provide('dshHomePath', …)）。
+#
+# ── 排他性约束（重要）───────────────────────────────────────────────────────
+# ctx.compaction 服务每上下文只允许一个实现。dsh-argp、dsh-compaction-instant、
+# dsh-headroom、@deepseek-ai/dsh-compaction-basic 四个引擎互斥：
+#   - 默认启用 dsh-argp（0-LLM 原子引用图剪枝, 选择性遗忘）;
+#   - dsh-compaction-instant 与 dsh-headroom 以 disabled 行随附, 切引擎=改
+#     disabled 后重启（README「引擎切换」一节）。
+# 若你之前单独安装过任一子插件（direct bundle），请先 `dsh plugin --profile web
+# remove <name>` 移除其独立行, 再启用本 bundle, 否则行 id 重复。
+# 注意: 工具名 recall 在 argp 与 compaction-instant 中重名, tools 注册器对重名
+# 直接抛错, 因此两个引擎绝不能同时启用（见包内 test/contract.test.mjs）。
+#
+# ── 引擎可用性（0.1.5 实测）─────────────────────────────────────────────────
+#   dsh-argp          ^1.1.0   ✅ 已适配 0.1.5（peer 明确 ^0.1.5-rc.1,
+#                             仍导出 ArgpGraphEngine, 且自己也走 ctx.settings）
+#   dsh-compaction-instant 0.1.4  ❌ 仍 import 已删除的
+#                             installSettingsSection / settingsNamespace —— 在
+#                             0.1.5 上该行一旦启用即模块求值期抛错。**默认禁用,
+#                             请勿启用**，等上游发新版再切（见 README 故障排查）。
+#   dsh-headroom      0.3.0   ✅ 只 import 官方包，peer 为 "*"（未验证启用后的
+#                             代理链路，启用前请自行确认本地 Headroom 代理）
+#
+# ── 组件清单 ───────────────────────────────────────────────────────────────
+# 1 压缩引擎 (默认 argp)        dsh-argp / dsh-compaction-instant (可选, 禁用)
+# 2 工具输出压缩                @wanyantiande/dsh-headroom (可选, 默认禁用:
+#                              需要本地 Headroom 代理, autoInstall 关闭)
+# 3 长期记忆                    dsh-memory-vault (启用, 本地 storage) /
+#                              dsh-sgme (可选, 需要原厂网关, 默认禁用)
+# 4 MCP 工具面压缩              dsh-mcp-lens (启用, 默认零服务器, 仅 2 工具)
+# 5 注入审计                    dsh-context-doctor (GitHub-only, 未随本包
+#                              安装; 用户自行 `dsh plugin --profile web add
+#                              "github:Zhenyu98/dsh-context-doctor#main"` 后,
+#                              本插件的 brain_verify 会自动发现并接入, 见文末)
+#
+# ── 应用顺序 ───────────────────────────────────────────────────────────────
+# 本 patch 在 profile 已有层之后应用; 用户 profile 的 cordis.patch.yml 在
+# bundle 之后, 因此用户的覆盖仍然胜出。
+#
+# ── 配置要点 ───────────────────────────────────────────────────────────────
+# - cachePath 用 loader 的 dshHomePath 助手解析到 $DSH_HOME, 绝不要用相对路径
+#   （曾因相对路径 + 必填字段缺省导致 `invalid config: $.cachePath missing`）。
+# - 本 patch 为每个非禁用行补齐了上游官方 patch 的全部配置键：
+#   mcp-lens 的 cachePath 是 schema 中唯一 required 字段, 其余键均由代码兜底,
+#   显式补齐可避免未来版本收紧默认值。
+
+- id: compaction-basic
+  disabled: true
+
+- insert:
+    # ── 本插件行（统一层）───────────────────────────────────────────────
+    - id: dsh-brain-compaction
+      name: dsh-brain-compaction
+
+    # ── 压缩引擎：默认 argp（0-LLM, 精确压缩率, selective forgetting）────
+    #    0.1.5 适配基线 = dsh-argp ^1.1.0（package.json dependencies 已同步）。
+    - id: dsh-argp
+      name: dsh-argp
+      config:
+        maxPasses: 256
+        recencyGuard: 10
+        # presetClean: false —— 关掉 dsh-argp 的"预设净化"。
+        #
+        # 它默认会在挂载时（roster 可用即执行）扫描 roster 里 trust === 'system'
+        # 的 shipped 预设，把仍挂 stock `compaction-basic` 的那些**复制**成
+        # 用户根下的 `<id>-argp` 副本（摘掉 compaction-basic / tool-result-pruner），
+        # 于是预设选择器里会凭空多出「标准模式 (ARGP)」「PTC 模式 (ARGP)」
+        # 「创造模式 (ARGP)」三项。
+        #
+        # 本 bundle 不需要它：host 层的 `dsh-argp` 行已经启用（见上），
+        # compaction-basic 已在本 patch 顶部禁用，会话级引擎由预设自己的
+        # `compaction` 组决定。关掉之后选择器只留原版预设 + 用户自己的预设
+        # （如 `brain-compaction`），列表干净且不再每轮重启重新生成。
+        #
+        # 注意：该键不在 argp 的 ArgpUserSettingsSchema 中（那是运行时/面板
+        # schema），而是 apply() 直接读的行配置——`constructor(ctx, config = {})`
+        # 里 `if (config.presetClean !== false)`。置 false 即完全跳过净化。
+        presetClean: false
+
+    # ── 备选引擎 1: instant（VCC 式近无损, 毫秒级）。⚠️ DSH 0.1.5 下
+    #    dsh-compaction-instant@0.1.4 仍引用已删除的 settings 包级导出,
+    #    启用即启动失败；等上游适配后再去掉 disabled。──────────────
+    - id: brain-compaction-instant
+      name: dsh-compaction-instant
+      disabled: true
+      config:
+        thresholdRatio: 0.5
+        retainTurns: 1
+        retainTokens: 5120
+        checkpointCap: 65536
+        auto: true
+    - id: brain-tool-recall
+      name: dsh-compaction-instant/tool
+      disabled: true
+    - id: brain-command-recall
+      name: dsh-compaction-instant/command
+      disabled: true
+
+    # ── 备选引擎 2: headroom（工具输出压缩 + CCR 可逆存储）。启用需先
+    #    准备本地 Headroom 代理; 代理参数 (command/pythonPath/uvCommand/
+    #    baseUrl) 启用后经统一面板配置, 此处只关掉 autoInstall。─────────
+    - id: brain-headroom
+      name: '@wanyantiande/dsh-headroom'
+      disabled: true
+      config:
+        headroom:
+          autoInstall: false
+
+    # ── 长期记忆: 本地跨会话记忆库（默认启用, 无需网络/嵌入服务）────
+    - id: brain-memory-vault
+      name: dsh-memory-vault
+      config:
+        injectLimit: 8
+        recallLimit: 10
+
+    # ── 长期记忆: SGME 多智能体共享记忆（默认禁用, 需要原厂网关 +
+    #    SGME_AGENT_KEY; 启用后由统一面板/README 说明配置）─────────
+    - id: brain-sgme
+      name: dsh-sgme
+      disabled: true
+      config:
+        baseUrl: !!js process.env.SGME_BASE_URL ?? 'http://192.168.10.10:9910'
+        agentKey: !!js process.env.SGME_AGENT_KEY ?? ''
+        adminKey: !!js process.env.SGME_ADMIN_KEY ?? ''
+        agentId: dsh
+        injectMode: daily
+        injectMaxTokens: 800
+        searchLimit: 5
+        syncOnTurnEnd: true
+        turnBatchSize: 1
+
+    # ── MCP 工具面压缩: 懒加载, 默认零服务器（fail-closed）───────────
+    - id: brain-mcp-lens
+      name: dsh-mcp-lens
+      config:
+        servers: []
+        cachePath: !!js dshHomePath('mcp-lens/catalog.json')
+        catalogTtlMs: 86400000
+        idleDisconnectMs: 300000
+        connectTimeoutMs: 30000
+        callTimeoutMs: 60000
+        discoveryTimeoutMs: 30000
+        maxDiscoveryPages: 1000
+        maxToolsPerServer: 10000
+        maxBytesPerTool: 1048576
+        maxTotalCatalogBytes: 67108864
+        maxHttpResponseBytes: 16777216
+        maxCursorBytes: 4096
+        searchLimitDefault: 5
+        searchLimitMax: 10
+        allowTools: []
+        denyTools: []
+
+    # ── 智能路由: dsh-routing-suite（"We Need" 思维链, 0 额外 LLM 调用）──
+    #    host 行: 只读状态 API + 策略配置面; 对【预设 id 恰为 routing-suite】
+    #    的会话在 system-prompt/assemble 时按首条用户任务注入一句约 90 字符的
+    #    路由引导（修复/排查/审查→检查优先; 新建/实现→直接执行并验证）。
+    #    brain 预设把同样的 We-Need 纪律固化在 persona 里（任何首任务都生效,
+    #    不依赖该 id 判断), 二者叠加即"思维链 + 0 额外请求"。
+    #    注意: 若本机曾单独安装过 dsh-routing-suite（其自身 bundle 行 id 同名
+    #    dsh-routing-suite), 请先 `dsh plugin --profile web remove
+    #    dsh-routing-suite`, 否则行 id 重复且 /routing-suite/api 路由挂两次。
+    - id: brain-routing-suite
+      name: dsh-routing-suite
+      config:
+        enabled: true
+        strategy: auto
+
+# ── 注入审计（可选组件）─────────────────────────────────────────────────────
+# dsh-context-doctor 未发布到 npm（GitHub-only, private: true）。用户按官方
+# README 安装该 bundle 后, 其自身的 patch 会插入 context-doctor 行; 本插件的
+# brain_verify / brain_status 会自动检测 context_audit 工具并将其报告纳入
+# 验证输出, 无需任何额外配置。
